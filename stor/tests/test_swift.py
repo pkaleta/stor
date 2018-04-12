@@ -1938,6 +1938,20 @@ class TestUpload(SwiftTestCase):
             'checksum': False
         })
 
+    @mock.patch('time.sleep', autospec=True)
+    def test_upload_retry_on_authentication_error(self, mock_sleep, _):
+        self.mock_swift.upload.side_effect = swift.AuthenticationError('foo')
+
+        swift_p = SwiftPath('swift://tenant/container/path')
+        with settings.use({'swift': {'num_retries': 5}}):
+            with self.assertRaises(swift.AuthenticationError):
+                swift_p.upload(['upload'])
+
+        # The actual number of retries in the case of AuthenticationError is 2 *
+        # (num_retries + 1). This is because for each retry, an extra one is attempted in
+        # ``_retry_on_cached_auth_err``.
+        self.assertEquals(len(self.mock_swift.upload.call_args_list), 12)
+
 
 class TestCopy(SwiftTestCase):
     @mock.patch.object(swift.SwiftPath, 'download_object', autospec=True)
